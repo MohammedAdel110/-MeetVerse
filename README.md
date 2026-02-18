@@ -79,36 +79,3 @@ Preserve privacy
 Reduce latency
 
 Prevent raw audio from being transmitted to external servers
-
-🏗️ Tech Stack (Suggested Architecture)
-Frontend
-
-React.js / Next.js
-
-WebRTC
-
-Web Audio API
-
-WebAssembly (for local AI processing)
-
-Backend
-
-Node.js / .NET / Express
-
-WebSocket (real-time signaling)
-
-RESTful APIs
-
-AI & Processing
-
-Speech-to-Text API
-
-Custom Noise Suppression Model
-
-Audio Processing Pipelines
-
-Database
-
-PostgreSQL / MongoDB
-
-Redis (for real-time session management)
