@@ -1,0 +1,206 @@
+CREATE TABLE Users (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    Email NVARCHAR(256) NOT NULL UNIQUE,
+    PasswordHash NVARCHAR(512) NOT NULL,
+    Name NVARCHAR(256) NULL,
+    AvatarUrl NVARCHAR(512) NULL,
+    Roles NVARCHAR(128) NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE Groups (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    Name NVARCHAR(256) NOT NULL,
+    Description NVARCHAR(MAX) NULL,
+    CreatedById UNIQUEIDENTIFIER NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_Groups_Users_CreatedById FOREIGN KEY (CreatedById) REFERENCES Users(Id)
+);
+
+CREATE TABLE UserGroups (
+    UserId UNIQUEIDENTIFIER NOT NULL,
+    GroupId UNIQUEIDENTIFIER NOT NULL,
+    Role NVARCHAR(32) NOT NULL,
+    JoinedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT PK_UserGroups PRIMARY KEY (UserId, GroupId),
+    CONSTRAINT FK_UserGroups_Users_UserId FOREIGN KEY (UserId) REFERENCES Users(Id),
+    CONSTRAINT FK_UserGroups_Groups_GroupId FOREIGN KEY (GroupId) REFERENCES Groups(Id)
+);
+
+CREATE TABLE GroupMessages (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    GroupId UNIQUEIDENTIFIER NOT NULL,
+    SenderId UNIQUEIDENTIFIER NOT NULL,
+    Content NVARCHAR(MAX) NOT NULL,
+    SentAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    EditedAt DATETIME2 NULL,
+    DeletedAt DATETIME2 NULL,
+    CONSTRAINT FK_GroupMessages_Groups_GroupId FOREIGN KEY (GroupId) REFERENCES Groups(Id),
+    CONSTRAINT FK_GroupMessages_Users_SenderId FOREIGN KEY (SenderId) REFERENCES Users(Id)
+);
+
+CREATE TABLE Meetings (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    HostId UNIQUEIDENTIFIER NOT NULL,
+    GroupId UNIQUEIDENTIFIER NULL,
+    Title NVARCHAR(256) NOT NULL,
+    Description NVARCHAR(MAX) NULL,
+    ScheduledStart DATETIME2 NOT NULL,
+    ScheduledEnd DATETIME2 NULL,
+    Status NVARCHAR(32) NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_Meetings_Users_HostId FOREIGN KEY (HostId) REFERENCES Users(Id),
+    CONSTRAINT FK_Meetings_Groups_GroupId FOREIGN KEY (GroupId) REFERENCES Groups(Id)
+);
+
+CREATE TABLE MeetingParticipants (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    MeetingId UNIQUEIDENTIFIER NOT NULL,
+    UserId UNIQUEIDENTIFIER NOT NULL,
+    Role NVARCHAR(32) NOT NULL,
+    JoinedAt DATETIME2 NOT NULL,
+    LeftAt DATETIME2 NULL,
+    IsActive BIT NOT NULL,
+    CONSTRAINT FK_MeetingParticipants_Meetings_MeetingId FOREIGN KEY (MeetingId) REFERENCES Meetings(Id),
+    CONSTRAINT FK_MeetingParticipants_Users_UserId FOREIGN KEY (UserId) REFERENCES Users(Id)
+);
+
+CREATE TABLE ChatMessages (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    MeetingId UNIQUEIDENTIFIER NOT NULL,
+    SenderId UNIQUEIDENTIFIER NOT NULL,
+    Content NVARCHAR(MAX) NOT NULL,
+    SentAt DATETIME2 NOT NULL,
+    EditedAt DATETIME2 NULL,
+    DeletedAt DATETIME2 NULL,
+    CONSTRAINT FK_ChatMessages_Meetings_MeetingId FOREIGN KEY (MeetingId) REFERENCES Meetings(Id),
+    CONSTRAINT FK_ChatMessages_Users_SenderId FOREIGN KEY (SenderId) REFERENCES Users(Id)
+);
+
+CREATE TABLE WhiteboardSessions (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    MeetingId UNIQUEIDENTIFIER NOT NULL,
+    StartedAt DATETIME2 NOT NULL,
+    EndedAt DATETIME2 NULL,
+    CONSTRAINT FK_WhiteboardSessions_Meetings_MeetingId FOREIGN KEY (MeetingId) REFERENCES Meetings(Id)
+);
+
+CREATE TABLE WhiteboardEvents (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    SessionId UNIQUEIDENTIFIER NOT NULL,
+    UserId UNIQUEIDENTIFIER NOT NULL,
+    Type NVARCHAR(32) NOT NULL,
+    PayloadJson NVARCHAR(MAX) NOT NULL,
+    CreatedAt DATETIME2 NOT NULL,
+    CONSTRAINT FK_WhiteboardEvents_WhiteboardSessions_SessionId FOREIGN KEY (SessionId) REFERENCES WhiteboardSessions(Id),
+    CONSTRAINT FK_WhiteboardEvents_Users_UserId FOREIGN KEY (UserId) REFERENCES Users(Id)
+);
+
+CREATE TABLE Recordings (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    MeetingId UNIQUEIDENTIFIER NOT NULL,
+    FilePath NVARCHAR(512) NOT NULL,
+    DurationSeconds FLOAT NOT NULL,
+    SampleRate INT NOT NULL,
+    SizeBytes BIGINT NOT NULL,
+    IsNoiseCleaned BIT NOT NULL,
+    AverageNoiseLevel FLOAT NULL,
+    Status NVARCHAR(32) NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_Recordings_Meetings_MeetingId FOREIGN KEY (MeetingId) REFERENCES Meetings(Id)
+);
+
+CREATE TABLE Transcripts (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    MeetingId UNIQUEIDENTIFIER NOT NULL UNIQUE,
+    RecordingId UNIQUEIDENTIFIER NOT NULL UNIQUE,
+    Provider NVARCHAR(64) NOT NULL,
+    Language NVARCHAR(32) NULL,
+    Status NVARCHAR(32) NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_Transcripts_Meetings_MeetingId FOREIGN KEY (MeetingId) REFERENCES Meetings(Id),
+    CONSTRAINT FK_Transcripts_Recordings_RecordingId FOREIGN KEY (RecordingId) REFERENCES Recordings(Id)
+);
+
+CREATE TABLE TranscriptLines (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    TranscriptId UNIQUEIDENTIFIER NOT NULL,
+    StartTimeSeconds FLOAT NOT NULL,
+    EndTimeSeconds FLOAT NOT NULL,
+    SpeakerUserId UNIQUEIDENTIFIER NULL,
+    SpeakerLabel NVARCHAR(64) NULL,
+    Text NVARCHAR(MAX) NOT NULL,
+    CONSTRAINT FK_TranscriptLines_Transcripts_TranscriptId FOREIGN KEY (TranscriptId) REFERENCES Transcripts(Id),
+    CONSTRAINT FK_TranscriptLines_Users_SpeakerUserId FOREIGN KEY (SpeakerUserId) REFERENCES Users(Id)
+);
+
+CREATE TABLE MeetingSummaries (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    MeetingId UNIQUEIDENTIFIER NOT NULL UNIQUE,
+    TranscriptId UNIQUEIDENTIFIER NOT NULL,
+    SummaryText NVARCHAR(MAX) NOT NULL,
+    KeyDecisionsJson NVARCHAR(MAX) NULL,
+    ActionItemsJson NVARCHAR(MAX) NULL,
+    GeneratedBy NVARCHAR(64) NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_MeetingSummaries_Meetings_MeetingId FOREIGN KEY (MeetingId) REFERENCES Meetings(Id),
+    CONSTRAINT FK_MeetingSummaries_Transcripts_TranscriptId FOREIGN KEY (TranscriptId) REFERENCES Transcripts(Id)
+);
+
+CREATE TABLE NoiseProfiles (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    UserId UNIQUEIDENTIFIER NOT NULL UNIQUE,
+    ProfileDataJson NVARCHAR(MAX) NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_NoiseProfiles_Users_UserId FOREIGN KEY (UserId) REFERENCES Users(Id)
+);
+
+CREATE TABLE NoiseEvents (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    MeetingId UNIQUEIDENTIFIER NOT NULL,
+    UserId UNIQUEIDENTIFIER NOT NULL,
+    Timestamp DATETIME2 NOT NULL,
+    EventType NVARCHAR(64) NOT NULL,
+    Intensity FLOAT NOT NULL,
+    FrequencyBand NVARCHAR(64) NULL,
+    RawMetricsJson NVARCHAR(MAX) NULL,
+    CONSTRAINT FK_NoiseEvents_Meetings_MeetingId FOREIGN KEY (MeetingId) REFERENCES Meetings(Id),
+    CONSTRAINT FK_NoiseEvents_Users_UserId FOREIGN KEY (UserId) REFERENCES Users(Id)
+);
+
+CREATE TABLE NoiseReports (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    MeetingId UNIQUEIDENTIFIER NOT NULL,
+    UserId UNIQUEIDENTIFIER NOT NULL,
+    AvgClarityScore FLOAT NOT NULL,
+    AvgNoiseLevel FLOAT NOT NULL,
+    PeakNoiseLevel FLOAT NOT NULL,
+    NoiseEventsCount INT NOT NULL,
+    SpeakingTimeSeconds FLOAT NOT NULL,
+    SegmentsJson NVARCHAR(MAX) NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_NoiseReports_Meetings_MeetingId FOREIGN KEY (MeetingId) REFERENCES Meetings(Id),
+    CONSTRAINT FK_NoiseReports_Users_UserId FOREIGN KEY (UserId) REFERENCES Users(Id)
+);
+
+CREATE TABLE EngagementMetrics (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    MeetingId UNIQUEIDENTIFIER NOT NULL,
+    UserId UNIQUEIDENTIFIER NOT NULL,
+    TotalSpeakingTimeSeconds FLOAT NOT NULL,
+    MessagesSent INT NOT NULL,
+    ReactionsCount INT NOT NULL,
+    HandRaises INT NOT NULL,
+    ScreenShareDurationSeconds FLOAT NOT NULL,
+    LastActiveAt DATETIME2 NULL,
+    CONSTRAINT FK_EngagementMetrics_Meetings_MeetingId FOREIGN KEY (MeetingId) REFERENCES Meetings(Id),
+    CONSTRAINT FK_EngagementMetrics_Users_UserId FOREIGN KEY (UserId) REFERENCES Users(Id)
+);
+
+CREATE INDEX IX_Users_Email ON Users(Email);
+CREATE INDEX IX_GroupMessages_GroupId ON GroupMessages(GroupId);
+CREATE INDEX IX_GroupMessages_SentAt ON GroupMessages(SentAt);
+CREATE INDEX IX_Meetings_GroupId ON Meetings(GroupId);
+ALTER TABLE Users ADD NoiseProfileId UNIQUEIDENTIFIER NULL;
+
